@@ -21,8 +21,14 @@ func UserAction(database *sql.DB, user models.User) (err error) {
 		fmt.Scan(&summa)
 		fmt.Println("введите ID получателя")
 		fmt.Scan(&gainerId)
-		Translation(database, user.ID, gainerId, summa)
-		fmt.Println("успешно переведено")
+		err := Translation(database, user.ID, gainerId, summa)
+		if err != nil {
+			fmt.Println("ошибка при переводе")
+		} else {
+			fmt.Println("успешно переведено")
+		}
+		return err
+
 	case 3:
 		fmt.Println("Cписок банкоматов")
 		ShowATMS(database)

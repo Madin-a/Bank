@@ -32,3 +32,4 @@ const CreateTransactionTable = `create table if not exists archive(
 	gainerID integer not null,
 	availableLimit integer not null
 )`
+

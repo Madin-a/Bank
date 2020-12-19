@@ -17,25 +17,6 @@ func CheckBalance(database *sql.DB, userId int64) {
 	fmt.Println(account.Amount)
 }
 
-func Translation(database *sql.DB, giverID int64, gainerID int64, summa int64) (err error) {
-	var giverAccount, gainerAccount models.Account
-	database.QueryRow(db.GetAmountByID, giverID).Scan(&giverAccount.ID, &giverAccount.UserID, &giverAccount.Number, &giverAccount.Amount, &giverAccount.Currency)
-	database.QueryRow(db.GetAmountByID, gainerID).Scan(&gainerAccount.ID, &gainerAccount.UserID, &gainerAccount.Number, &gainerAccount.Amount, &gainerAccount.Currency)
-	if summa < 0 {
-		err = errors.New("сумма должна быть >= 0")
-		return err
-	}
-	if giverAccount.Amount >= summa {
-		gainerAccount.Amount = gainerAccount.Amount + summa
-		database.Exec(db.UpdateAmountByID, gainerAccount.Amount, gainerID)
-		giverAccount.Amount = giverAccount.Amount - summa
-		database.Exec(db.UpdateAmountByID, giverAccount.Amount, giverID)
-		err = errors.New("недостаточно средств")
-	}
-	models.AddTransaction(database, giverID, gainerID, summa, giverAccount.Amount)
-	return err
-}
-
 func ShowATMS(database *sql.DB) {
 	rows, err := database.Query(db.SelectATMs)
 	if err != nil {
@@ -171,3 +152,60 @@ func Archive(database *sql.DB, giver int64) {
 		fmt.Println("ID ", transaction.ID, "Date", transaction.Date, "Time", transaction.Time, "Amount ", transaction.Amount, "GiverID", transaction.GiverID, "GainerID", transaction.GainerID, "AvailableLimit", transaction.AvailableLimit)
 	}
 }
+
+func Translation(database *sql.DB, giverID int64, gainerID int64, summa int64) (err error) {
+	var giverAccount, gainerAccount models.Account
+	database.QueryRow(db.GetAmountByID, giverID).Scan(&giverAccount.ID, &giverAccount.UserID, &giverAccount.Number, &giverAccount.Amount, &giverAccount.Currency)
+	database.QueryRow(db.GetAmountByID, gainerID).Scan(&gainerAccount.ID, &gainerAccount.UserID, &gainerAccount.Number, &gainerAccount.Amount, &gainerAccount.Currency)
+	if summa < 0 {
+		err = errors.New("сумма должна быть >= 0")
+		return err
+	}
+
+	if giverAccount.Amount >= summa {
+		tx, errTx := database.Begin()
+		if errTx != nil {
+			return errTx
+		}
+		defer func() {
+			if errTx != nil || err != nil {
+				_ = tx.Rollback()
+				return
+			}
+			errTx = tx.Commit()
+		}()
+		gainerAccount.Amount = gainerAccount.Amount + summa
+		tx.Exec(db.UpdateAmountByID, gainerAccount.Amount, gainerID)
+		giverAccount.Amount = giverAccount.Amount - summa
+		tx.Exec(db.UpdateAmountByID, giverAccount.Amount, giverID)
+		err = models.AddTransaction(tx, giverID, gainerID, summa, giverAccount.Amount)
+		return err
+	} else {
+		err = errors.New("недостаточно средств")
+	}
+	return err
+}
+
+//func TransferToAccount(giverID int64, gainerID int64, summa int64, db *sql.DB) (err error){
+//	tx, err := db.Begin()
+//	if err != nil {
+//		return err
+//	}
+//	defer func() {
+//		if err != nil {
+//			_ = tx.Rollback()
+//			return
+//		}
+//		err = tx.Commit()
+//	}()
+//	_, err = tx.Exec(`UPDATE account set Amount = Amount - ? where UserID = ?`, Amount, Account)
+//	if err != nil {
+//		return err
+//	}
+//
+//	_, err = tx.Exec(`UPDATE account set Amount = Amount + ? where UserID = ?`, Amount, NewAccountNumber)
+//	if err != nil {
+//		return err
+//	}
+//	return nil
+//}
